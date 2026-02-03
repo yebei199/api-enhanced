@@ -3,7 +3,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Request payload for sending a verification code.
+use crate::enhanced::crypto::weapi;
+
 #[derive(Serialize, Debug)]
 pub struct SendCaptchaRequest {
     #[serde(rename = "ctcode")]
@@ -12,14 +13,12 @@ pub struct SendCaptchaRequest {
     pub cellphone: String,
 }
 
-/// Response structure for sending a verification code.
 #[derive(Deserialize, Debug)]
 pub struct SendCaptchaResponse {
     pub code: i32,
     pub message: Option<String>,
 }
 
-/// Request payload for verifying a verification code.
 #[derive(Serialize, Debug)]
 pub struct VerifyCaptchaRequest {
     #[serde(rename = "ctcode")]
@@ -28,27 +27,24 @@ pub struct VerifyCaptchaRequest {
     pub captcha: String,
 }
 
-/// Response structure for verifying a verification code.
 #[derive(Deserialize, Debug)]
 pub struct VerifyCaptchaResponse {
     pub code: i32,
     pub message: Option<String>,
 }
 
-/// Request payload for logging in with a phone number and captcha.
 #[derive(Serialize, Debug)]
 pub struct LoginCellphoneRequest {
     #[serde(rename = "type")]
-    pub login_type: String, // '1' for cellphone login
-    pub https: String, // 'true'
+    pub login_type: String,
+    pub https: String,
     pub phone: String,
     #[serde(rename = "countrycode")]
     pub country_code: String,
     pub captcha: String,
-    pub remember: String, // 'true'
+    pub remember: String,
 }
 
-/// Response structure for successful cellphone login.
 #[derive(Deserialize, Debug)]
 pub struct LoginCellphoneResponse {
     #[serde(rename = "avatarImgIdStr")]
@@ -57,7 +53,6 @@ pub struct LoginCellphoneResponse {
     pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// Represents the overall login result, including cookies.
 #[derive(Debug)]
 pub struct LoginResult {
     pub status: i32,
@@ -67,25 +62,6 @@ pub struct LoginResult {
 
 const BASE_URL: &str = "https://music.163.com";
 
-/// Placeholder for the weapi encryption logic.
-/// In a real implementation, this would encrypt the data and return the encrypted payload.
-fn encrypt_weapi(
-    data: &impl Serialize,
-) -> Result<HashMap<String, String>> {
-    // This is a placeholder. NetEase weapi requires complex AES and RSA encryption.
-    // For now, we return the data as-is in a way that reqwest can send,
-    // but in reality, this would be { "params": "...", "encSecKey": "..." }
-    let mut map = HashMap::new();
-    let json = serde_json::to_string(data)?;
-    map.insert("params".to_string(), json); // Fake encryption
-    map.insert(
-        "encSecKey".to_string(),
-        "placeholder".to_string(),
-    );
-    Ok(map)
-}
-
-/// Sends a verification code to the specified phone number.
 pub async fn send_captcha(
     client: &Client,
     phone: &str,
@@ -99,20 +75,23 @@ pub async fn send_captcha(
         cellphone: phone.to_string(),
     };
 
-    let encrypted_data = encrypt_weapi(&data)?;
+    let encrypted_data = weapi(&data)?;
 
-    let resp = client
+    let response = client
         .post(&url)
         .form(&encrypted_data)
+        .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .header(reqwest::header::REFERER, "https://music.163.com")
+        .header(reqwest::header::ORIGIN, "https://music.163.com")
         .send()
-        .await?
-        .json::<SendCaptchaResponse>()
         .await?;
 
-    Ok(resp)
+    let text = response.text().await?;
+    let result: SendCaptchaResponse = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse SendCaptchaResponse: {}, body: {}", e, text))?;
+    Ok(result)
 }
 
-/// Verifies the verification code for the specified phone number.
 pub async fn verify_captcha(
     client: &Client,
     phone: &str,
@@ -127,20 +106,23 @@ pub async fn verify_captcha(
         captcha: captcha.to_string(),
     };
 
-    let encrypted_data = encrypt_weapi(&data)?;
+    let encrypted_data = weapi(&data)?;
 
-    let resp = client
+    let response = client
         .post(&url)
         .form(&encrypted_data)
+        .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .header(reqwest::header::REFERER, "https://music.163.com")
+        .header(reqwest::header::ORIGIN, "https://music.163.com")
         .send()
-        .await?
-        .json::<VerifyCaptchaResponse>()
         .await?;
 
-    Ok(resp)
+    let text = response.text().await?;
+    let result: VerifyCaptchaResponse = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse VerifyCaptchaResponse: {}, body: {}", e, text))?;
+    Ok(result)
 }
 
-/// Logs in using a phone number and verification code.
 pub async fn login_cellphone(
     client: &Client,
     phone: &str,
@@ -158,17 +140,19 @@ pub async fn login_cellphone(
         remember: "true".to_string(),
     };
 
-    let encrypted_data = encrypt_weapi(&data)?;
+    let encrypted_data = weapi(&data)?;
 
     let response = client
         .post(&url)
         .form(&encrypted_data)
+        .header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .header(reqwest::header::REFERER, "https://music.163.com")
+        .header(reqwest::header::ORIGIN, "https://music.163.com")
         .send()
         .await?;
 
     let status = response.status().as_u16() as i32;
 
-    // Extract cookies
     let cookies = response
         .headers()
         .get_all(reqwest::header::SET_COOKIE)
@@ -177,8 +161,9 @@ pub async fn login_cellphone(
         .map(|s| s.to_string())
         .collect();
 
-    let body =
-        response.json::<LoginCellphoneResponse>().await?;
+    let text = response.text().await?;
+    let body: LoginCellphoneResponse = serde_json::from_str(&text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse LoginCellphoneResponse: {}, body: {}", e, text))?;
 
     Ok(LoginResult {
         status,
@@ -190,7 +175,9 @@ pub async fn login_cellphone(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dotenvy::dotenv;
     use serde_json::json;
+    use std::env;
 
     #[test]
     fn test_send_captcha_request_serialization() {
@@ -249,27 +236,21 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
-    #[test]
-    fn test_encrypt_weapi_placeholder() {
-        let data_map = HashMap::from([
-            ("key1".to_string(), "value1".to_string()),
-            ("key2".to_string(), "value2".to_string()),
-        ]);
-        let encrypted_result =
-            encrypt_weapi(&data_map).unwrap();
+    #[tokio::test]
+    #[ignore]
+    async fn test_integration_send_captcha() {
+        dotenv().ok();
+        let phone_number = env::var("CELLPHONE_NUMBER").expect("CELLPHONE_NUMBER environment variable not set for integration test");
+        let client = Client::new();
+        let result = send_captcha(
+            &client,
+            &phone_number,
+            Some("86"),
+        )
+        .await;
 
-        let expected_params =
-            serde_json::to_string(&data_map).unwrap();
-        let expected_enc_sec_key =
-            "placeholder".to_string();
-
-        assert_eq!(
-            encrypted_result.get("params"),
-            Some(&expected_params)
-        );
-        assert_eq!(
-            encrypted_result.get("encSecKey"),
-            Some(&expected_enc_sec_key)
-        );
+        result.unwrap_or_else(|e| {
+            panic!("Integration test failed: {:?}", e)
+        });
     }
 }
