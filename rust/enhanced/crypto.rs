@@ -9,11 +9,11 @@ use base64::{
     engine::general_purpose::STANDARD as BASE64_STANDARD,
 };
 use cbc::Encryptor;
-use cbc::cipher::Cipher;
 use hex;
 use rand::{Rng, thread_rng};
 use rsa::{
-    Pkcs1v15Encrypt, RsaPublicKey, pkcs8::DecodePublicKey,
+    BigUint, RsaPublicKey, pkcs8::DecodePublicKey,
+    traits::PublicKeyParts,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -24,7 +24,12 @@ type Aes128CbcEnc = Encryptor<Aes128>;
 const IV: &[u8] = b"0102030405060708";
 const PRESET_KEY: &[u8] = b"0CoJUm6Qyw8W8jud";
 const BASE62: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const PUBLIC_KEY_PEM: &str = "-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB\n-----END PUBLIC KEY-----";
+const PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ3
+7BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvakl
+V8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44o
+ncaTWz7OBGLbCiK45wIDAQAB
+-----END PUBLIC KEY-----"#;
 
 /// Implements the NetEase weapi encryption.
 pub fn weapi(
@@ -41,7 +46,12 @@ pub fn weapi(
 
     let params =
         aes_encrypt(text.as_bytes(), PRESET_KEY, IV)?;
-    let params = aes_encrypt(&params, &secret_key, IV)?;
+    let params_b64 = BASE64_STANDARD.encode(params);
+    let params = aes_encrypt(
+        params_b64.as_bytes(),
+        &secret_key,
+        IV,
+    )?;
 
     let mut reversed_key = secret_key.to_vec();
     reversed_key.reverse();
@@ -52,11 +62,23 @@ pub fn weapi(
             anyhow!("Failed to load public key: {}", e)
         })?;
 
-    let enc_sec_key = public_key
-        .encrypt(&mut rng, Pkcs1v15Encrypt, &reversed_key)
-        .map_err(|e| {
-            anyhow!("RSA encryption failed: {}", e)
-        })?;
+    // RSA Encryption (NoPadding / Manual modular exponentiation)
+    let n = public_key.n();
+    let e = public_key.e();
+
+    let mut padded_key = vec![0u8; 128];
+    let start = 128 - reversed_key.len();
+    padded_key[start..].copy_from_slice(&reversed_key);
+
+    let m = BigUint::from_bytes_be(&padded_key);
+    let c = m.modpow(e, n);
+    let enc_sec_key_bytes = c.to_bytes_be();
+
+    // Pad to 128 bytes to ensure 256 hex chars
+    let mut enc_sec_key = vec![0u8; 128];
+    let offset = 128 - enc_sec_key_bytes.len();
+    enc_sec_key[offset..]
+        .copy_from_slice(&enc_sec_key_bytes);
 
     let mut map = HashMap::new();
     map.insert(
@@ -76,7 +98,7 @@ fn aes_encrypt(
     key: &[u8],
     iv: &[u8],
 ) -> Result<Vec<u8>> {
-    let mut cipher = Aes128CbcEnc::new_from_slices(key, iv)
+    let cipher = Aes128CbcEnc::new_from_slices(key, iv)
         .map_err(|e| {
             anyhow!("Failed to create AES cipher: {}", e)
         })?;
@@ -88,8 +110,8 @@ fn aes_encrypt(
     buffer[..data.len()].copy_from_slice(data);
 
     // Call encrypt_padded_mut.
-    // The function returns the length of the ciphertext.
-    let ciphertext_len = cipher
+    // The function returns the ciphertext slice.
+    let ciphertext = cipher
         .encrypt_padded_mut::<Pkcs7>(
             &mut buffer,
             data.len(),
@@ -98,8 +120,5 @@ fn aes_encrypt(
             anyhow!("AES encryption failed: {}", e)
         })?;
 
-    // Truncate the buffer to the actual ciphertext length.
-    buffer.truncate(ciphertext_len);
-
-    Ok(buffer)
+    Ok(ciphertext.to_vec())
 }
