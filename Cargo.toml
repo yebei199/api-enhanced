@@ -1,0 +1,45 @@
+[package]
+name = "music_w"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[workspace.package]
+rust-version = "1.93"
+version = "0.2.0"
+edition = "2024"
+
+[profile.release]
+opt-level = "z"  # 优化体积
+debug = false
+strip = true
+lto = true
+panic = "unwind"
+
+[profile.dev]
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 1
+[profile.test]
+inherits = "dev" # test 自动继承上述“自己快编、依赖快跑”的策略
+
+[lib]
+path = "rust/lib.rs"
+
+[dependencies]
+anyhow = "1.0.100"
+tokio = { version = "1.49.0", features = ["full"] }
+chrono = { version = "0.4.43", features = ["serde"] }
+chrono-tz = "0.10.4"
+getset = "0.1.6"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+futures = "0.3.31"
+reqwest = { version = "0.13.1", default-features = false, features = [
+  "json",
+  "multipart",
+  "rustls",
+  "stream",
+  "query",
+] }
