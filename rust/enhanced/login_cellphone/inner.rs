@@ -23,6 +23,7 @@ pub(crate) struct SendCaptchaResponse {
     /// API response code (0 for success, non-zero for errors)
     pub code: i32,
     /// Optional error message or success message
+    #[allow(dead_code)]
     pub message: Option<String>,
 }
 
@@ -44,6 +45,7 @@ pub(crate) struct VerifyCaptchaResponse {
     /// API response code (0 for success, non-zero for errors)
     pub code: i32,
     /// Optional error message or success message
+    #[allow(dead_code)]
     pub message: Option<String>,
 }
 
