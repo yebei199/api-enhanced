@@ -18,12 +18,30 @@ use rsa::{
 use serde::Serialize;
 use std::collections::HashMap;
 
-// Define the type alias correctly using aes::Aes128 and cbc::Encryptor
+/// Type alias for AES-128 CBC encryption using PKCS7 padding.
 type Aes128CbcEnc = Encryptor<Aes128>;
 
+/// Initialization vector for AES encryption.
+///
+/// Fixed 8-byte IV used in the NetEase weapi encryption scheme.
 const IV: &[u8] = b"0102030405060708";
+
+/// Preset AES encryption key used in the NetEase weapi encryption scheme.
+///
+/// This 16-byte key is hardcoded and used for the first layer of AES encryption.
 const PRESET_KEY: &[u8] = b"0CoJUm6Qyw8W8jud";
+
+/// Base62 character set for generating random secret keys.
+///
+/// Contains alphanumeric characters (a-z, A-Z, 0-9) used for generating
+/// random 16-byte secret keys for the weapi encryption.
 const BASE62: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/// RSA public key in PEM format for encrypting the secret key.
+///
+/// 1024-bit RSA public key used to encrypt the reversed secret key in the
+/// NetEase weapi encryption scheme. The encryption uses RSA with NoPadding
+/// and manual modular exponentiation.
 const PUBLIC_KEY_PEM: &str = r#"-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ3
 7BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvakl
@@ -32,6 +50,28 @@ ncaTWz7OBGLbCiK45wIDAQAB
 -----END PUBLIC KEY-----"#;
 
 /// Implements the NetEase weapi encryption.
+///
+/// Encrypts serializable data using the NetEase weapi encryption scheme, which involves:
+/// 1. Generating a random 16-byte secret key using Base62 characters
+/// 2. Double-layer AES encryption (first with preset key, then with secret key)
+/// 3. RSA encryption of the reversed secret key with NoPadding
+///
+/// # Arguments
+///
+/// * `data` - A reference to any type that implements `Serialize` (typically a JSON object)
+///
+/// # Returns
+///
+/// Returns a `Result` containing a `HashMap` with two keys:
+/// - `"params"`: Base64-encoded encrypted parameters
+/// - `"encSecKey"`: Hex-encoded encrypted secret key
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Serialization fails
+/// - RSA public key loading fails
+/// - AES encryption fails
 pub fn weapi(
     data: &impl Serialize,
 ) -> Result<HashMap<String, String>> {
@@ -93,6 +133,24 @@ pub fn weapi(
     Ok(map)
 }
 
+/// Encrypts data using AES-128 CBC mode with PKCS7 padding.
+///
+/// # Arguments
+///
+/// * `data` - The plaintext data to encrypt
+/// * `key` - The encryption key (must be 16 bytes for AES-128)
+/// * `iv` - The initialization vector (must be 16 bytes)
+///
+/// # Returns
+///
+/// Returns a `Result` containing the encrypted ciphertext as a `Vec<u8>`.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The key or IV length is invalid
+/// - Cipher initialization fails
+/// - Encryption fails
 fn aes_encrypt(
     data: &[u8],
     key: &[u8],

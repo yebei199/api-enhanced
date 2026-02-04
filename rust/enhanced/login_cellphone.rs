@@ -5,63 +5,106 @@ use std::collections::HashMap;
 
 use crate::enhanced::crypto::weapi;
 
+/// Request structure for sending SMS captcha to cellphone
 #[derive(Serialize, Debug)]
 pub struct SendCaptchaRequest {
+    /// Country code for the phone number (renamed to "ctcode" for API compatibility)
     #[serde(rename = "ctcode")]
     pub country_code: String,
+    /// Secret key for the captcha service
     pub secrete: String,
+    /// Phone number to send captcha to
     pub cellphone: String,
 }
 
+/// Response structure for sending SMS captcha
 #[derive(Deserialize, Debug)]
 pub struct SendCaptchaResponse {
+    /// API response code (0 for success, non-zero for errors)
     pub code: i32,
+    /// Optional error message or success message
     pub message: Option<String>,
 }
 
+/// Request structure for verifying SMS captcha
 #[derive(Serialize, Debug)]
 pub struct VerifyCaptchaRequest {
+    /// Country code for the phone number (renamed to "ctcode" for API compatibility)
     #[serde(rename = "ctcode")]
     pub country_code: String,
+    /// Phone number to verify captcha for
     pub cellphone: String,
+    /// Captcha code received on the phone
     pub captcha: String,
 }
 
+/// Response structure for verifying SMS captcha
 #[derive(Deserialize, Debug)]
 pub struct VerifyCaptchaResponse {
+    /// API response code (0 for success, non-zero for errors)
     pub code: i32,
+    /// Optional error message or success message
     pub message: Option<String>,
 }
 
+/// Request structure for cellphone login
 #[derive(Serialize, Debug)]
 pub struct LoginCellphoneRequest {
+    /// Login type (renamed to "type" for API compatibility)
     #[serde(rename = "type")]
     pub login_type: String,
+    /// HTTPS flag for the request
     pub https: String,
+    /// Phone number for login
     pub phone: String,
+    /// Country code for the phone number (renamed to "countrycode" for API compatibility)
     #[serde(rename = "countrycode")]
     pub country_code: String,
+    /// Captcha code for verification
     pub captcha: String,
+    /// Remember login flag
     pub remember: String,
 }
 
+/// Response structure for cellphone login
 #[derive(Deserialize, Debug)]
 pub struct LoginCellphoneResponse {
+    /// Avatar image ID string (renamed to "avatarImgIdStr" for API compatibility)
     #[serde(rename = "avatarImgIdStr")]
     pub avatar_img_id_str: Option<String>,
+    /// Additional response data from the API
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
 }
 
+/// Result structure for cellphone login operation
 #[derive(Debug)]
 pub struct LoginResult {
+    /// HTTP status code of the login request
     pub status: i32,
+    /// Response body from the login API
     pub body: LoginCellphoneResponse,
+    /// Cookies received from the login response
     pub cookies: Vec<String>,
 }
 
 const BASE_URL: &str = "https://music.163.com";
 
+/// Send SMS captcha to the specified phone number
+///
+/// This function sends a captcha to the provided phone number for verification.
+/// It uses the NetEase Music API to send the SMS captcha.
+///
+/// # Parameters
+/// - `client`: The HTTP client to use for the request
+/// - `phone`: The phone number to send the captcha to
+/// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
+///
+/// # Returns
+/// Returns a `SendCaptchaResponse` containing the API response code and message.
+///
+/// # Errors
+/// Returns an error if the HTTP request fails or the response cannot be parsed.
 pub async fn send_captcha(
     client: &Client,
     phone: &str,
@@ -75,6 +118,7 @@ pub async fn send_captcha(
         cellphone: phone.to_string(),
     };
 
+    // Encrypt the request data using WeAPI encryption for NetEase Music API
     let encrypted_data = weapi(&data)?;
 
     let response = client
@@ -92,6 +136,22 @@ pub async fn send_captcha(
     Ok(result)
 }
 
+/// Verify SMS captcha for the specified phone number
+///
+/// This function verifies the captcha code received on the phone number.
+/// It uses the NetEase Music API to verify the SMS captcha.
+///
+/// # Parameters
+/// - `client`: The HTTP client to use for the request
+/// - `phone`: The phone number to verify the captcha for
+/// - `captcha`: The captcha code received on the phone
+/// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
+///
+/// # Returns
+/// Returns a `VerifyCaptchaResponse` containing the API response code and message.
+///
+/// # Errors
+/// Returns an error if the HTTP request fails or the response cannot be parsed.
 pub async fn verify_captcha(
     client: &Client,
     phone: &str,
@@ -123,6 +183,22 @@ pub async fn verify_captcha(
     Ok(result)
 }
 
+/// Perform cellphone login using the provided credentials
+///
+/// This function performs a cellphone login to NetEase Music using the provided phone number and captcha.
+/// It uses the NetEase Music API to authenticate the user.
+///
+/// # Parameters
+/// - `client`: The HTTP client to use for the request
+/// - `phone`: The phone number for login
+/// - `captcha`: The captcha code for verification
+/// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
+///
+/// # Returns
+/// Returns a `LoginResult` containing the HTTP status, response body, and cookies.
+///
+/// # Errors
+/// Returns an error if the HTTP request fails, the response cannot be parsed, or login fails.
 pub async fn login_cellphone(
     client: &Client,
     phone: &str,
@@ -153,6 +229,7 @@ pub async fn login_cellphone(
 
     let status = response.status().as_u16() as i32;
 
+    // Extract cookies from the response headers
     let cookies = response
         .headers()
         .get_all(reqwest::header::SET_COOKIE)
@@ -162,6 +239,7 @@ pub async fn login_cellphone(
         .collect();
 
     let text = response.text().await?;
+    // Parse the JSON response body, with detailed error reporting
     let body: LoginCellphoneResponse = serde_json::from_str(&text)
         .map_err(|e| anyhow::anyhow!("Failed to parse LoginCellphoneResponse: {}, body: {}", e, text))?;
 
@@ -172,6 +250,10 @@ pub async fn login_cellphone(
     })
 }
 
+/// Tests module for cellphone login functionality
+///
+/// This module contains unit tests for the cellphone login functionality,
+/// including request serialization tests and integration tests.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +261,10 @@ mod tests {
     use serde_json::json;
     use std::env;
 
+    /// Test SendCaptchaRequest serialization
+    ///
+    /// This test verifies that the SendCaptchaRequest struct serializes correctly
+    /// to the expected JSON format with proper field renaming.
     #[test]
     fn test_send_captcha_request_serialization() {
         let request = SendCaptchaRequest {
@@ -196,6 +282,10 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
+    /// Test VerifyCaptchaRequest serialization
+    ///
+    /// This test verifies that the VerifyCaptchaRequest struct serializes correctly
+    /// to the expected JSON format with proper field renaming.
     #[test]
     fn test_verify_captcha_request_serialization() {
         let request = VerifyCaptchaRequest {
@@ -213,6 +303,10 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
+    /// Test LoginCellphoneRequest serialization
+    ///
+    /// This test verifies that the LoginCellphoneRequest struct serializes correctly
+    /// to the expected JSON format with proper field renaming.
     #[test]
     fn test_login_cellphone_request_serialization() {
         let request = LoginCellphoneRequest {
@@ -236,6 +330,11 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
+    /// Integration test for sending SMS captcha
+    ///
+    /// This test sends a real SMS captcha to a phone number using the NetEase Music API.
+    /// It requires the CELLPHONE_NUMBER environment variable to be set.
+    /// The test is ignored by default and should be run manually when needed.
     #[tokio::test]
     #[ignore]
     async fn test_integration_send_captcha() {
