@@ -1,0 +1,3 @@
+- Refactored `login_cellphone.rs` to use a facade pattern.
+- Moved implementation details to `login_cellphone/inner.rs`.
+- Exposed a simplified API returning `bool` for captcha operations.

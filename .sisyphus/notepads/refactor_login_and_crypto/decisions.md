@@ -1,0 +1,2 @@
+- Chose to use `inner.rs` module to hide internal structs and logic.
+- Simplified `send_captcha` and `verify_captcha` to return `Result<bool>` based on API success code 200.
