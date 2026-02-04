@@ -131,4 +131,71 @@ mod tests {
             }
         }
     }
+
+    /// Interactive integration test for full login flow
+    ///
+    /// This test will:
+    /// 1. Send a captcha to the phone number specified in `CELLPHONE_NUMBER`.
+    /// 2. Wait for user input from stdin.
+    /// 3. Attempt to log in with the provided captcha.
+    ///
+    /// cargo test --package music_w --lib -- enhanced::login_cellphone::tests::test_interactive_login_flow --ignored --nocapture
+    #[tokio::test]
+    #[ignore]
+    async fn test_interactive_login_flow() {
+        use std::io::{self, Write};
+        
+        dotenv().ok();
+        let phone_number = env::var("CELLPHONE_NUMBER").expect("CELLPHONE_NUMBER environment variable not set");
+        let client = Client::new();
+
+        println!("\n--- Interactive Login Test ---");
+        println!("Target Phone: {}", phone_number);
+
+        // 1. Send Captcha
+        println!("Sending captcha...");
+        let send_res = send_captcha(&client, &phone_number, Some("86")).await;
+        match send_res {
+            Ok(true) => println!("Captcha sent successfully!"),
+            Ok(false) => {
+                eprintln!("Failed to send captcha (API returned non-200).");
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error sending captcha: {:?}", e);
+                return;
+            }
+        }
+
+        // 2. Wait for input
+        print!("Please enter the SMS captcha you received: ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).expect("Failed to read line");
+        let captcha = input.trim();
+
+        if captcha.is_empty() {
+            println!("No captcha entered, aborting.");
+            return;
+        }
+
+        // 3. Login
+        println!("Logging in with captcha '{}'...", captcha);
+        let login_res = login_cellphone(&client, &phone_number, captcha, Some("86")).await;
+
+        match login_res {
+            Ok(result) => {
+                println!("Login SUCCESS!");
+                println!("Status: {}", result.status);
+                println!("Cookies: {:?}", result.cookies);
+                // Basic assertion
+                assert_eq!(result.status, 200, "Login status should be 200");
+            }
+            Err(e) => {
+                println!("Login FAILED: {:?}", e);
+                panic!("Login failed");
+            }
+        }
+    }
 }
