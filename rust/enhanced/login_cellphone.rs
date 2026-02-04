@@ -101,7 +101,7 @@ const BASE_URL: &str = "https://music.163.com";
 /// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
 ///
 /// # Returns
-/// Returns a `SendCaptchaResponse` containing the API response code and message.
+///  a `SendCaptchaResponse` containing the API response code and message.
 ///
 /// # Errors
 /// Returns an error if the HTTP request fails or the response cannot be parsed.
@@ -148,7 +148,7 @@ pub async fn send_captcha(
 /// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
 ///
 /// # Returns
-/// Returns a `VerifyCaptchaResponse` containing the API response code and message.
+///  a `VerifyCaptchaResponse` containing the API response code and message.
 ///
 /// # Errors
 /// Returns an error if the HTTP request fails or the response cannot be parsed.
@@ -195,7 +195,7 @@ pub async fn verify_captcha(
 /// - `ctcode`: Optional country code for the phone number (defaults to "86" if not provided)
 ///
 /// # Returns
-/// Returns a `LoginResult` containing the HTTP status, response body, and cookies.
+///  a `LoginResult` containing the HTTP status, response body, and cookies.
 ///
 /// # Errors
 /// Returns an error if the HTTP request fails, the response cannot be parsed, or login fails.
