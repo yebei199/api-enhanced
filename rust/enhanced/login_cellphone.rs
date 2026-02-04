@@ -1,3 +1,51 @@
+//! Cellphone Login Module
+//!
+//! # Usage
+//!
+//! This module provides functionality to log in using a mobile phone number and SMS captcha.
+//!
+//! ## Workflow
+//!
+//! 1. **Send Captcha**: Call the [`send_captcha`] function to send an SMS verification code to the specified phone number.
+//! 2. **Login**: Once the user receives the code, call the [`login_cellphone`] function with the phone number and the captcha to complete the login.
+//!    - [`login_cellphone`] handles the encryption and request processing internally.
+//!    - Although [`verify_captcha`] is available for standalone verification, it is not required to call it before logging in.
+//!
+//! ## Handling Cookies
+//!
+//! The [`LoginResult`] struct returned by [`login_cellphone`] contains a `cookies` field.
+//! These cookies (e.g., `MUSIC_U`) are essential credentials for making subsequent authenticated API calls.
+//! It is recommended to save these cookies to the `reqwest::Client`'s Cookie Store or manually attach them to headers in future requests.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use reqwest::Client;
+//! // Assuming the crate name is `music_w`
+//! use music_w::enhanced::login_cellphone::{send_captcha, login_cellphone};
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let client = Client::new();
+//!     let phone = "13800138000";
+//!     let country_code = Some("86");
+//!
+//!     // 1. Send Captcha
+//!     send_captcha(&client, phone, country_code).await?;
+//!     
+//!     // ... Retrieve the captcha entered by the user ...
+//!     let captcha = "1234";
+//!
+//!     // 2. Login
+//!     let result = login_cellphone(&client, phone, captcha, country_code).await?;
+//!     
+//!     println!("Login successful, status code: {}", result.status);
+//!     println!("Received Cookies: {:?}", result.cookies);
+//!     
+//!     Ok(())
+//! }
+//! ```
+
 mod inner;
 
 use anyhow::Result;
